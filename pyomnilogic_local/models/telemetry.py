@@ -318,6 +318,7 @@ class TelemetryFilter(BaseModel):
     reported_speed: int = Field(alias="@reportedFilterSpeed")
     power: int = Field(alias="@power")
     last_speed: int = Field(alias="@lastSpeed")
+    fp_override: int | None = Field(alias="@fpOverride", default=None)
 
 
 class TelemetryGroup(BaseModel):
