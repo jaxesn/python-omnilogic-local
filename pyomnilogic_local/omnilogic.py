@@ -145,6 +145,13 @@ class OmniLogic:
             _LOGGER.debug("No MSPConfig data available; skipping equipment update")
             return
 
+        _LOGGER.debug(
+            "Updating equipment: %d BOWs, %d groups, %d schedules found in MSPConfig",
+            len(self.mspconfig.backyard.bow) if self.mspconfig.backyard.bow else 0,
+            len(self.mspconfig.groups) if self.mspconfig.groups else 0,
+            len(self.mspconfig.schedules) if self.mspconfig.schedules else 0,
+        )
+
         try:
             self.system.update_config(self.mspconfig.system)
         except AttributeError:

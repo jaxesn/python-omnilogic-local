@@ -452,6 +452,7 @@ class MSPConfig(BaseModel):
 
     @staticmethod
     def load_xml(xml: str) -> MSPConfig:
+        _LOGGER.debug("MSPConfig XML: %s", xml)
         data = xml_parse(
             xml,
             # Some things will be lists or not depending on if a pool has more than one of that piece of equipment.  Here we are coercing
