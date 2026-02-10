@@ -274,16 +274,19 @@ class OmniLogicProtocol(asyncio.DatagramProtocol):
                 return
 
             # Wait for a bit to either receive an ACK for our message, otherwise, we retry delivery
+            # We use an exponential backoff for the timeout to allow for network congestion or slow controller responses
+            timeout = ACK_WAIT_TIMEOUT * (2**attempt)
             try:
-                await asyncio.wait_for(self._wait_for_ack(message.id), ACK_WAIT_TIMEOUT)
+                await asyncio.wait_for(self._wait_for_ack(message.id), timeout)
             except TimeoutError as exc:
                 if attempt < max_attempts - 1:
                     _LOGGER.warning(
-                        "ACK not received for message type %s (ID: %s), attempt %d/%d. Retrying...",
+                        "ACK not received for message type %s (ID: %s), attempt %d/%d (timeout: %0.1fs). Retrying...",
                         message.type.name,
                         message.id,
                         attempt + 1,
                         max_attempts,
+                        timeout,
                     )
                 else:
                     _LOGGER.exception(
@@ -359,10 +362,15 @@ class OmniLogicProtocol(asyncio.DatagramProtocol):
             OmniFragmentationException: If fragment reassembly fails.
         """
         # wait for the initial packet.
-        message = await self.data_queue.get()
+        try:
+            message = await asyncio.wait_for(self.data_queue.get(), 30.0)
+        except TimeoutError as exc:
+            msg = "Timeout waiting for initial response packet from controller"
+            raise OmniTimeoutError(msg) from exc
 
         # If messages have to be re-transmitted, we can sometimes receive multiple ACKs.  The first one would be handled by
         # self._ensure_sent, but if any subsequent ACKs are sent to us, we need to dump them and wait for a "real" message.
+        # We also want to skip any asynchronous updates (telemetry/config) that might arrive while we're waiting for our response
         while message.type in [MessageType.ACK, MessageType.XML_ACK]:
             _LOGGER.debug("Skipping duplicate ACK message")
             message = await self.data_queue.get()
@@ -403,7 +411,7 @@ class OmniLogicProtocol(asyncio.DatagramProtocol):
 
                 # We need to wait long enough for the Omni to get through all of it's retries before we bail out.
                 try:
-                    resp = await asyncio.wait_for(self.data_queue.get(), self._omni_retransmit_time * self._omni_retransmit_count)
+                    resp = await asyncio.wait_for(self.data_queue.get(), 15.0)
                 except TimeoutError as exc:
                     msg = f"Timeout receiving fragment: got {len(data_fragments)}/{leadmsg.msg_block_count} fragments: {exc}"
                     raise OmniFragmentationError(msg) from exc
