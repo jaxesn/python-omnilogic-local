@@ -272,6 +272,7 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.chlorinator = None
             return
 
+        mspconfig.chlorinator.bow_id = self.system_id
         self.chlorinator = Chlorinator(self._omni, mspconfig.chlorinator, telemetry)
 
     def _update_csads(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -280,6 +281,8 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.csads = EquipmentDict()
             return
 
+        for csad in mspconfig.csad:
+            csad.bow_id = self.system_id
         self.csads = EquipmentDict([CSAD(self._omni, csad, telemetry) for csad in mspconfig.csad])
 
     def _update_filters(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -288,6 +291,8 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.filters = EquipmentDict()
             return
 
+        for filter_ in mspconfig.filter:
+            filter_.bow_id = self.system_id
         self.filters = EquipmentDict([Filter(self._omni, filter_, telemetry) for filter_ in mspconfig.filter])
 
     def _update_heater(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -296,6 +301,7 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.heater = None
             return
 
+        mspconfig.heater.bow_id = self.system_id
         self.heater = Heater(self._omni, mspconfig.heater, telemetry)
 
     def _update_lights(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -304,6 +310,8 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.lights = EquipmentDict()
             return
 
+        for light in mspconfig.colorlogic_light:
+            light.bow_id = self.system_id
         self.lights = EquipmentDict([ColorLogicLight(self._omni, light, telemetry) for light in mspconfig.colorlogic_light])
 
     def _update_pumps(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -312,6 +320,8 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.pumps = EquipmentDict()
             return
 
+        for pump in mspconfig.pump:
+            pump.bow_id = self.system_id
         self.pumps = EquipmentDict([Pump(self._omni, pump, telemetry) for pump in mspconfig.pump])
 
     def _update_relays(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -320,6 +330,8 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.relays = EquipmentDict()
             return
 
+        for relay in mspconfig.relay:
+            relay.bow_id = self.system_id
         self.relays = EquipmentDict([Relay(self._omni, relay, telemetry) for relay in mspconfig.relay])
 
     def _update_sensors(self, mspconfig: MSPBoW, telemetry: Telemetry) -> None:
@@ -328,4 +340,6 @@ class Bow(OmniEquipment[MSPBoW, TelemetryBoW]):
             self.sensors = EquipmentDict()
             return
 
+        for sensor in mspconfig.sensor:
+            sensor.bow_id = self.system_id
         self.sensors = EquipmentDict([Sensor(self._omni, sensor, telemetry) for sensor in mspconfig.sensor])

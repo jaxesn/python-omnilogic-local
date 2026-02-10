@@ -54,7 +54,7 @@ class OmniBase(BaseModel):
     _sub_devices: set[str] | None = None
     system_id: int = Field(alias="System-Id")
     name: str | None = Field(alias="Name", default=None)
-    bow_id: int = -1
+    bow_id: int = Field(alias="bow-system-id", default=-1)
     omni_type: OmniType
 
     def without_subdevices(self) -> Self:
@@ -348,8 +348,9 @@ class MSPBoW(OmniBase):
     # itself is initialized
     def __init__(self, **data: Any) -> None:
         # As we are requiring a bow_id on everything in OmniBase, we need to propagate it down now
-        # before calling super().__init__() so that it will be present for validation.
+        # after calling super().__init__() so that the model is fully initialized.
         super().__init__(**data)
+        self.bow_id = self.system_id
         self.propagate_bow_id(self.system_id)
 
 
