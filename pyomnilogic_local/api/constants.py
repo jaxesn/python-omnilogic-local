@@ -13,7 +13,7 @@ BLOCK_MESSAGE_HEADER_OFFSET = 8  # Offset to skip block message header and get t
 # Timing Constants (in seconds)
 OMNI_RETRANSMIT_TIME = 2.1  # Time Omni waits before retransmitting a packet
 OMNI_RETRANSMIT_COUNT = 5  # Number of retransmit attempts (6 total including initial)
-ACK_WAIT_TIMEOUT = 2.0  # Timeout waiting for ACK response
+ACK_WAIT_TIMEOUT = 5.0  # Timeout waiting for ACK response
 DEFAULT_RESPONSE_TIMEOUT = 10.0  # Default timeout for receiving responses
 
 # Network Constants
