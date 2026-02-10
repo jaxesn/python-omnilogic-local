@@ -166,7 +166,7 @@ class MSPPump(OmniBase):
 class MSPRelay(OmniBase):
     omni_type: OmniType = OmniType.RELAY
 
-    type: RelayType = Field(alias="Type")
+    equip_type: RelayType = Field(alias="Type")
     function: RelayFunction = Field(alias="Function")
 
 
