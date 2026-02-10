@@ -63,6 +63,14 @@ def _print_filter_info(filt: MSPFilter, telemetry: TelemetryType | None) -> None
             value = FilterValvePosition(value).pretty()
         elif attr_name == "why_on":
             value = FilterWhyOn(value).pretty()
+        elif attr_name == "fp_override":
+            value = "Active" if value == 1 else "Inactive"
+        elif attr_name.startswith("freeze_protect_"):
+            if attr_name == "freeze_protect_enabled":
+                value = "Yes" if value else "No"
+            elif attr_name == "freeze_protect_override_interval":
+                value = f"{value // 60} minutes" if value else "None"
+            # temp and speed can be printed as is
         elif isinstance(value, list):
             # Format lists nicely
             value = ", ".join(str(v) for v in value) if value else "None"

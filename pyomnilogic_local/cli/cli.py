@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import click
 
 from pyomnilogic_local.cli.debug import commands as debug
@@ -9,7 +10,8 @@ from pyomnilogic_local.cli.get import commands as get
 @click.group()
 @click.pass_context
 @click.option("--host", default="127.0.0.1", help="Hostname or IP address of OmniLogic system (default: 127.0.0.1)")
-def entrypoint(ctx: click.Context, host: str) -> None:
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose debug logging")
+def entrypoint(ctx: click.Context, host: str, verbose: bool) -> None:
     """OmniLogic Local Control - Command line interface for Hayward pool controllers.
 
     This CLI provides local control and monitoring of Hayward OmniLogic and OmniHub
@@ -31,6 +33,7 @@ def entrypoint(ctx: click.Context, host: str) -> None:
     For more information, visit: https://github.com/cryptk/python-omnilogic-local
     """
     ctx.ensure_object(dict)
+    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format="%(asctime)s %(levelname)s:%(name)s:%(message)s")
 
     # Store the host for later connection, but don't connect yet
     ctx.obj["HOST"] = host
