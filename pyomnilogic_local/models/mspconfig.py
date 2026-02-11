@@ -54,7 +54,7 @@ class OmniBase(BaseModel):
     _sub_devices: set[str] | None = None
     system_id: int = Field(alias="System-Id")
     name: str | None = Field(alias="Name", default=None)
-    bow_id: int = -1
+    bow_id: int = Field(alias="bow-system-id", default=-1)
     omni_type: OmniType
 
     def without_subdevices(self) -> Self:
@@ -158,7 +158,7 @@ class MSPPump(OmniBase):
 class MSPRelay(OmniBase):
     omni_type: OmniType = OmniType.RELAY
 
-    type: RelayType = Field(alias="Type")
+    equip_type: RelayType = Field(alias="Type")
     function: RelayFunction = Field(alias="Function")
 
 
@@ -340,8 +340,9 @@ class MSPBoW(OmniBase):
     # itself is initialized
     def __init__(self, **data: Any) -> None:
         # As we are requiring a bow_id on everything in OmniBase, we need to propagate it down now
-        # before calling super().__init__() so that it will be present for validation.
+        # after calling super().__init__() so that the model is fully initialized.
         super().__init__(**data)
+        self.bow_id = self.system_id
         self.propagate_bow_id(self.system_id)
 
 
@@ -443,6 +444,7 @@ class MSPConfig(BaseModel):
 
     @staticmethod
     def load_xml(xml: str) -> MSPConfig:
+
         data = xml_parse(
             xml,
             # Some things will be lists or not depending on if a pool has more than one of that piece of equipment.  Here we are coercing
