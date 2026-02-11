@@ -18,6 +18,7 @@ class MessageType(IntEnum, PrettyEnum):
     SET_HEATER_ENABLED = 147
     SET_CHLOR_PARAMS = 155
     SET_EQUIPMENT = 164
+    SET_FREEZE_PROTECT_OVERRIDE = 166
     CREATE_SCHEDULE = 230
     DELETE_SCHEDULE = 231
     EDIT_SCHEDULE = 233
@@ -562,6 +563,7 @@ class SensorUnits(StrEnum, PrettyEnum):
 class ValveActuatorState(IntEnum, PrettyEnum):
     OFF = 0
     ON = 1
+    MOVING = 2
 
 
 # Schedules

@@ -121,7 +121,7 @@ class MSPSensor(OmniBase):
 
 
 class MSPFilter(OmniBase):
-    _YES_NO_FIELDS = {"priming_enabled"}
+    _YES_NO_FIELDS = {"priming_enabled", "freeze_protect_enabled"}
 
     omni_type: OmniType = OmniType.FILTER
 
@@ -135,10 +135,14 @@ class MSPFilter(OmniBase):
     low_speed: int = Field(alias="Vsp-Low-Pump-Speed")
     medium_speed: int = Field(alias="Vsp-Medium-Pump-Speed")
     high_speed: int = Field(alias="Vsp-High-Pump-Speed")
+    freeze_protect_enabled: bool | None = Field(alias="Freeze-Protect-Enable", default=None)
+    freeze_protect_temp: int | None = Field(alias="Freeze-Protect-Temp", default=None)
+    freeze_protect_speed: int | None = Field(alias="Freeze-Protect-Speed", default=None)
+    freeze_protect_override_interval: int | None = Field(alias="Freeze-Protect-Override-Interval", default=None)
 
 
 class MSPPump(OmniBase):
-    _YES_NO_FIELDS = {"priming_enabled"}
+    _YES_NO_FIELDS = {"priming_enabled", "freeze_protect_enabled"}
 
     omni_type: OmniType = OmniType.PUMP
 
@@ -153,6 +157,10 @@ class MSPPump(OmniBase):
     low_speed: int = Field(alias="Vsp-Low-Pump-Speed")
     medium_speed: int = Field(alias="Vsp-Medium-Pump-Speed")
     high_speed: int = Field(alias="Vsp-High-Pump-Speed")
+    freeze_protect_enabled: bool | None = Field(alias="Freeze-Protect-Enable", default=None)
+    freeze_protect_temp: int | None = Field(alias="Freeze-Protect-Temp", default=None)
+    freeze_protect_speed: int | None = Field(alias="Freeze-Protect-Speed", default=None)
+    freeze_protect_override_interval: int | None = Field(alias="Freeze-Protect-Override-Interval", default=None)
 
 
 class MSPRelay(OmniBase):

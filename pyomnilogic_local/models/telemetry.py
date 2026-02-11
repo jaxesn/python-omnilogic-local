@@ -1,6 +1,7 @@
 # ruff: noqa: TC001  # pydantic relies on the omnitypes imports at runtime
 from __future__ import annotations
 
+import logging
 from typing import Any, SupportsInt, cast, overload
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
@@ -39,6 +40,9 @@ from pyomnilogic_local.omnitypes import (
 )
 
 from .exceptions import OmniParsingError
+
+_LOGGER = logging.getLogger(__name__)
+
 
 # Example telemetry XML data:
 #
@@ -318,6 +322,7 @@ class TelemetryFilter(BaseModel):
     reported_speed: int = Field(alias="@reportedFilterSpeed")
     power: int = Field(alias="@power")
     last_speed: int = Field(alias="@lastSpeed")
+    fp_override: int | None = Field(alias="@fpOverride", default=None)
 
 
 class TelemetryGroup(BaseModel):
@@ -509,6 +514,7 @@ class Telemetry(BaseModel):
 
     @staticmethod
     def load_xml(xml: str) -> Telemetry:
+
         @overload
         def xml_postprocessor(path: Any, key: Any, value: SupportsInt) -> tuple[Any, SupportsInt]: ...
         @overload

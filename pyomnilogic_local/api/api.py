@@ -480,6 +480,32 @@ class OmniLogicAPI:
 
         return await self.async_send_message(MessageType.SET_EQUIPMENT, req_body, False)
 
+    async def async_set_freeze_protect_override(
+        self,
+        pool_id: int,
+        interval: int,
+    ) -> None:
+        """Override freeze protection for a specified interval.
+
+        Args:
+            pool_id (int): The Pool/BodyOfWater ID
+            interval (int): Override interval in minutes
+        """
+        body_element = ET.Element("Request", {"xmlns": XML_NAMESPACE})
+
+        name_element = ET.SubElement(body_element, "Name")
+        name_element.text = "SetUIFPOverrideCmd"
+
+        parameters_element = ET.SubElement(body_element, "Parameters")
+        parameter = ET.SubElement(parameters_element, "Parameter", name="PoolID", dataType="int")
+        parameter.text = str(pool_id)
+        parameter = ET.SubElement(parameters_element, "Parameter", name="Interval", dataType="int")
+        parameter.text = str(interval)
+
+        req_body = ET.tostring(body_element, xml_declaration=True, encoding=XML_ENCODING)
+
+        return await self.async_send_message(MessageType.SET_FREEZE_PROTECT_OVERRIDE, req_body, False)
+
     async def async_set_filter_speed(self, pool_id: int, equipment_id: int, speed: int) -> None:
         """Set the speed for a variable speed filter/pump.
 
