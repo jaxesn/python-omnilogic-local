@@ -424,9 +424,12 @@ class OmniLogicProtocol(asyncio.DatagramProtocol):
 
                 # We need to wait long enough for the Omni to get through all of it's retries before we bail out.
                 try:
-                    resp = await asyncio.wait_for(self.data_queue.get(), 25.0)
+                    resp = await asyncio.wait_for(self.data_queue.get(), MAX_FRAGMENT_WAIT_TIME)
                 except TimeoutError as exc:
-                    msg = f"Timeout receiving fragment: got {len(data_fragments)}/{leadmsg.msg_block_count} fragments: {exc}"
+                    msg = (
+                        f"Timeout receiving fragment: got {len(data_fragments)}/{leadmsg.msg_block_count} fragments. "
+                        f"Waited {MAX_FRAGMENT_WAIT_TIME}s."
+                    )
                     raise OmniFragmentationError(msg) from exc
 
                 # We only want to collect blockmessages here
