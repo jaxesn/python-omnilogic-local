@@ -6,7 +6,13 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from pyomnilogic_local.api import OmniLogicAPI
-from pyomnilogic_local.api.constants import DEFAULT_RESPONSE_TIMEOUT
+from pyomnilogic_local.api.constants import (
+    ACK_WAIT_TIMEOUT,
+    DEFAULT_RESPONSE_TIMEOUT,
+    MAX_FRAGMENT_WAIT_TIME,
+    OMNI_RETRANSMIT_COUNT,
+    OMNI_RETRANSMIT_TIME,
+)
 from pyomnilogic_local.backyard import Backyard
 from pyomnilogic_local.collections import EquipmentDict
 from pyomnilogic_local.groups import Group
@@ -52,11 +58,20 @@ class OmniLogic:
     _min_mspversion: str = "R05"
     _warned_mspversion: bool = False
 
-    def __init__(self, host: str, port: int = 10444, timeout: float = DEFAULT_RESPONSE_TIMEOUT) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int = 10444,
+        timeout: float = DEFAULT_RESPONSE_TIMEOUT,
+        ack_timeout: float = ACK_WAIT_TIMEOUT,
+        retransmit_time: float = OMNI_RETRANSMIT_TIME,
+        retransmit_count: int = OMNI_RETRANSMIT_COUNT,
+        fragment_timeout: float = MAX_FRAGMENT_WAIT_TIME,
+    ) -> None:
         self.host = host
         self.port = port
 
-        self._api = OmniLogicAPI(host, port, timeout)
+        self._api = OmniLogicAPI(host, port, timeout, ack_timeout, retransmit_time, retransmit_count, fragment_timeout)
         self._refresh_lock = asyncio.Lock()
 
     def __repr__(self) -> str:
@@ -144,6 +159,13 @@ class OmniLogic:
         if not hasattr(self, "mspconfig") or self.mspconfig is None:
             _LOGGER.debug("No MSPConfig data available; skipping equipment update")
             return
+
+        _LOGGER.debug(
+            "Updating equipment: %d BOWs, %d groups, %d schedules found in MSPConfig",
+            len(self.mspconfig.backyard.bow) if self.mspconfig.backyard.bow else 0,
+            len(self.mspconfig.groups) if self.mspconfig.groups else 0,
+            len(self.mspconfig.schedules) if self.mspconfig.schedules else 0,
+        )
 
         try:
             self.system.update_config(self.mspconfig.system)

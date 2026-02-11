@@ -17,7 +17,7 @@ import pytest
 
 from pyomnilogic_local.api.api import OmniLogicAPI, _validate_id, _validate_speed, _validate_temperature
 from pyomnilogic_local.api.constants import MAX_SPEED_PERCENT, MAX_TEMPERATURE_F, MIN_SPEED_PERCENT, MIN_TEMPERATURE_F, XML_NAMESPACE
-from pyomnilogic_local.api.exceptions import OmniValidationError
+from pyomnilogic_local.api.exceptions import OmniFragmentationError, OmniTimeoutError, OmniValidationError
 from pyomnilogic_local.omnitypes import ColorLogicBrightness, ColorLogicShow40, ColorLogicSpeed, HeaterMode, MessageType
 
 if TYPE_CHECKING:
@@ -134,7 +134,7 @@ def test_api_init_valid() -> None:
     api = OmniLogicAPI("192.168.1.100")
     assert api.controller_ip == "192.168.1.100"
     assert api.controller_port == 10444
-    assert api.response_timeout == 5.0
+    assert api.response_timeout == 10.0
 
 
 def test_api_init_custom_params() -> None:
@@ -553,3 +553,50 @@ async def test_async_send_message_closes_transport_on_error() -> None:
 
         # Verify transport was still closed despite the error
         mock_transport.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_send_message_retries_on_failure() -> None:
+    """Test that async_send_message retries on OmniFragmentationError or OmniTimeoutError."""
+    # Create API with 3 retries
+    api = OmniLogicAPI("192.168.1.100", api_max_retries=3)
+
+    mock_transport = MagicMock()
+    mock_protocol = AsyncMock()
+
+    # Protocol will fail first 2 times, then succeed
+    mock_protocol.send_message = AsyncMock(side_effect=[OmniTimeoutError("Timeout"), OmniFragmentationError("Fragmentation"), None])
+
+    with patch("asyncio.get_running_loop") as mock_loop:
+        # Should be called 3 times (create_datagram_endpoint) because we retry the whole connection
+        mock_loop.return_value.create_datagram_endpoint = AsyncMock(return_value=(mock_transport, mock_protocol))
+
+        await api.async_send_message(MessageType.REQUEST_CONFIGURATION, "test", need_response=False)
+
+        # check create_datagram_endpoint call count
+        assert mock_loop.return_value.create_datagram_endpoint.call_count == 3
+        # check transport.close call count
+        assert mock_transport.close.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_async_send_message_raises_after_max_retries() -> None:
+    """Test that async_send_message raises exception after exhausting retries."""
+    # Create API with 2 retries
+    api = OmniLogicAPI("192.168.1.100", api_max_retries=2)
+
+    mock_transport = MagicMock()
+    mock_protocol = AsyncMock()
+
+    # Protocol will fail always
+    mock_protocol.send_message = AsyncMock(side_effect=OmniTimeoutError("Timeout"))
+
+    with patch("asyncio.get_running_loop") as mock_loop:
+        mock_loop.return_value.create_datagram_endpoint = AsyncMock(return_value=(mock_transport, mock_protocol))
+
+        with pytest.raises(OmniTimeoutError, match="Timeout"):
+            await api.async_send_message(MessageType.REQUEST_CONFIGURATION, "test", need_response=False)
+
+        # check create_datagram_endpoint call count == max_retries
+        assert mock_loop.return_value.create_datagram_endpoint.call_count == 2
+        assert mock_transport.close.call_count == 2
