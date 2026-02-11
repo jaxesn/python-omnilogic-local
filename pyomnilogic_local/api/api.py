@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Literal, overload
@@ -15,16 +16,21 @@ from pyomnilogic_local.omnitypes import (
 )
 
 from .constants import (
+    ACK_WAIT_TIMEOUT,
     DEFAULT_CONTROLLER_PORT,
     DEFAULT_RESPONSE_TIMEOUT,
+    MAX_FRAGMENT_WAIT_TIME,
     MAX_SPEED_PERCENT,
     MAX_TEMPERATURE_F,
     MIN_SPEED_PERCENT,
     MIN_TEMPERATURE_F,
+    OMNI_API_MAX_RETRIES,
+    OMNI_RETRANSMIT_COUNT,
+    OMNI_RETRANSMIT_TIME,
     XML_ENCODING,
     XML_NAMESPACE,
 )
-from .exceptions import OmniValidationError
+from .exceptions import OmniFragmentationError, OmniTimeoutError, OmniValidationError
 from .protocol import OmniLogicProtocol
 
 if TYPE_CHECKING:
@@ -89,7 +95,15 @@ def _validate_id(id_value: int, param_name: str) -> None:
 
 class OmniLogicAPI:
     def __init__(
-        self, controller_ip: str, controller_port: int = DEFAULT_CONTROLLER_PORT, response_timeout: float = DEFAULT_RESPONSE_TIMEOUT
+        self,
+        controller_ip: str,
+        controller_port: int = DEFAULT_CONTROLLER_PORT,
+        response_timeout: float = DEFAULT_RESPONSE_TIMEOUT,
+        ack_timeout: float = ACK_WAIT_TIMEOUT,
+        retransmit_time: float = OMNI_RETRANSMIT_TIME,
+        retransmit_count: int = OMNI_RETRANSMIT_COUNT,
+        fragment_timeout: float = MAX_FRAGMENT_WAIT_TIME,
+        api_max_retries: int = OMNI_API_MAX_RETRIES,
     ) -> None:
         """Initialize the OmniLogic API client.
 
@@ -97,6 +111,11 @@ class OmniLogicAPI:
             controller_ip: IP address of the OmniLogic controller.
             controller_port: UDP port of the OmniLogic controller (default: 10444).
             response_timeout: Timeout in seconds for receiving responses (default: 5.0).
+            ack_timeout: Timeout in seconds waiting for an ACK (default: 2.0).
+            retransmit_time: Time in seconds between retransmissions (default: 2.1).
+            retransmit_count: Number of retransmission attempts (default: 5).
+            fragment_timeout: Timeout in seconds waiting for all fragments (default: 60.0).
+            api_max_retries: Maximum number of retries for the entire API flow (default: 3).
 
         Raises:
             OmniValidationException: If parameters are invalid.
@@ -114,6 +133,11 @@ class OmniLogicAPI:
         self.controller_ip = controller_ip
         self.controller_port = controller_port
         self.response_timeout = response_timeout
+        self.ack_timeout = ack_timeout
+        self.retransmit_time = retransmit_time
+        self.retransmit_count = retransmit_count
+        self.fragment_timeout = fragment_timeout
+        self.api_max_retries = api_max_retries
 
     @overload
     async def async_send_message(self, message_type: MessageType, message: str | None, need_response: Literal[True]) -> str: ...
@@ -133,18 +157,45 @@ class OmniLogicAPI:
             str | None: The response body sent from the Omni if need_response indicates that a response will be sent
         """
         loop = asyncio.get_running_loop()
-        transport, protocol = await loop.create_datagram_endpoint(OmniLogicProtocol, remote_addr=(self.controller_ip, self.controller_port))
+        protocol_factory = functools.partial(
+            OmniLogicProtocol,
+            ack_timeout=self.ack_timeout,
+            retransmit_time=self.retransmit_time,
+            retransmit_count=self.retransmit_count,
+            fragment_timeout=self.fragment_timeout,
+        )
 
-        resp: str | None = None
-        try:
-            if need_response:
-                resp = await protocol.send_and_receive(message_type, message)
-            else:
-                await protocol.send_message(message_type, message)
-        finally:
-            transport.close()
+        last_exception: Exception | None = None
+        for attempt in range(self.api_max_retries):
+            try:
+                transport, protocol = await loop.create_datagram_endpoint(
+                    protocol_factory, remote_addr=(self.controller_ip, self.controller_port)
+                )
 
-        return resp
+                try:
+                    if need_response:
+                        return await protocol.send_and_receive(message_type, message)
+                    await protocol.send_message(message_type, message)
+                    return None
+                finally:
+                    transport.close()
+
+            except (OmniFragmentationError, OmniTimeoutError) as exc:
+                last_exception = exc
+                if attempt < self.api_max_retries - 1:
+                    _LOGGER.warning(
+                        "Attempt %d/%d failed with error: %s. Retrying...",
+                        attempt + 1,
+                        self.api_max_retries,
+                        exc,
+                    )
+                    await asyncio.sleep(0.5 * (attempt + 1))  # Simple backoff
+                else:
+                    _LOGGER.exception("All %d attempts failed.", self.api_max_retries)
+
+        if last_exception:
+            raise last_exception
+        return None
 
     @overload
     async def async_get_mspconfig(self, raw: Literal[True]) -> str: ...

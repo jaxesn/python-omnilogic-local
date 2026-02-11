@@ -714,7 +714,8 @@ async def test_receive_file_fragmented_invalid_leadmessage() -> None:
 @pytest.mark.asyncio
 async def test_receive_file_fragmented_timeout_waiting() -> None:
     """Test timeout while waiting for fragments."""
-    protocol = OmniLogicProtocol()
+    # Use a short timeout for testing
+    protocol = OmniLogicProtocol(fragment_timeout=0.1)
     protocol.transport = MagicMock()
 
     leadmsg_payload = (
@@ -738,7 +739,8 @@ async def test_receive_file_fragmented_timeout_waiting() -> None:
 @pytest.mark.asyncio
 async def test_receive_file_fragmented_max_wait_time_exceeded() -> None:
     """Test that MAX_FRAGMENT_WAIT_TIME timeout is enforced."""
-    protocol = OmniLogicProtocol()
+    # Set a short timeout for testing
+    protocol = OmniLogicProtocol(fragment_timeout=30.0)
     protocol.transport = MagicMock()
 
     leadmsg_payload = (
@@ -825,3 +827,88 @@ async def test_wait_for_ack_cancels_pending_tasks() -> None:
 
     assert len(done_tasks) == 1, "Expected exactly one task to complete normally"
     assert len(cancelled_tasks) == 1, "Expected exactly one task to be cancelled"
+
+
+def test_protocol_initialization_custom_values() -> None:
+    """Test that protocol initializes with custom timeout values."""
+    custom_ack_timeout = 5.0
+    custom_retransmit_time = 4.0
+    custom_retransmit_count = 10
+    custom_fragment_timeout = 60.0
+
+    protocol = OmniLogicProtocol(
+        ack_timeout=custom_ack_timeout,
+        retransmit_time=custom_retransmit_time,
+        retransmit_count=custom_retransmit_count,
+        fragment_timeout=custom_fragment_timeout,
+    )
+
+    assert protocol.ack_timeout == custom_ack_timeout
+    assert protocol.retransmit_time == custom_retransmit_time
+    assert protocol.retransmit_count == custom_retransmit_count
+    assert protocol.fragment_timeout == custom_fragment_timeout
+
+
+@pytest.mark.asyncio
+async def test_ensure_sent_exponential_backoff() -> None:
+    """Test that _ensure_sent uses exponential backoff for timeouts."""
+    protocol = OmniLogicProtocol(ack_timeout=0.1)
+    protocol.transport = MagicMock()
+
+    # Mock _wait_for_ack to allow us to proceed to waiting
+    # We will mock asyncio.wait_for to raise TimeoutError to simulate timeout
+    with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError) as mock_wait_for:
+        message = OmniLogicMessage(123, MessageType.REQUEST_CONFIGURATION)
+
+        # We expect OmniTimeoutError after max attempts
+        with pytest.raises(OmniTimeoutError):
+            await protocol._ensure_sent(message, max_attempts=3)
+
+        # Check that we called wait_for 3 times with increasing timeouts
+        assert mock_wait_for.call_count == 3
+
+        # args[1] is the timeout value passed to wait_for
+        # 0.1 * 2^0 = 0.1
+        assert mock_wait_for.call_args_list[0].args[1] == 0.1
+        # 0.1 * 2^1 = 0.2
+        assert mock_wait_for.call_args_list[1].args[1] == 0.2
+        # 0.1 * 2^2 = 0.4
+        assert mock_wait_for.call_args_list[2].args[1] == 0.4
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ack_telemetry_update_instead(caplog: pytest.LogCaptureFixture) -> None:
+    """Test that Telemetry Update with wrong ID is accepted (ACK was dropped) and waiting stops."""
+    protocol = OmniLogicProtocol()
+    protocol.transport = MagicMock()
+
+    # Put a Telemetry Update with wrong ID (simulating dropped ACK for 123)
+    telemetry_msg = OmniLogicMessage(456, MessageType.MSP_TELEMETRY_UPDATE)
+    await protocol.data_queue.put(telemetry_msg)
+
+    with caplog.at_level("DEBUG"):
+        # We are waiting for ACK 123
+        await protocol._wait_for_ack(123)
+
+    # Should log that ACK was dropped
+    assert any("ACK was dropped" in r.message for r in caplog.records)
+    # Telemetry should be put back in queue
+    assert protocol.data_queue.qsize() == 1
+    queued_msg = protocol.data_queue.get_nowait()
+    assert queued_msg.id == 456
+    assert queued_msg.type == MessageType.MSP_TELEMETRY_UPDATE
+
+
+@pytest.mark.asyncio
+async def test_receive_file_initial_packet_timeout() -> None:
+    """Test that _receive_file raises OmniTimeoutError if initial packet is not received."""
+    protocol = OmniLogicProtocol()
+    protocol.transport = MagicMock()
+
+    # Patch asyncio.wait_for to raise TimeoutError when waiting for the first packet
+    # self.data_queue.get() is the first thing awaited
+    with (
+        patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
+        pytest.raises(OmniTimeoutError, match="Timeout waiting for initial response"),
+    ):
+        await protocol._receive_file()
