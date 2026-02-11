@@ -73,14 +73,19 @@ def ensure_connection(ctx: click.Context) -> None:
 
     try:
         omni = asyncio.run(get_omni(host))
+        ctx.obj["OMNI"] = omni
+
+        # If we are in raw mode, we skip fetching parsed data as the command will likely fetch its own raw data
+        if ctx.obj.get("RAW"):
+            return
+
         mspconfig, telemetry = asyncio.run(fetch_startup_data(omni))
+
+        ctx.obj["MSPCONFIG"] = mspconfig
+        ctx.obj["TELEMETRY"] = telemetry
     except Exception as exc:
         click.secho(str(exc), fg="red", err=True)
         ctx.exit(1)
-
-    ctx.obj["OMNI"] = omni
-    ctx.obj["MSPCONFIG"] = mspconfig
-    ctx.obj["TELEMETRY"] = telemetry
 
 
 @overload

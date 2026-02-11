@@ -62,7 +62,7 @@ def _print_relay_info(relay: MSPRelay, telemetry: TelemetryType | None) -> None:
     relay_data: dict[Any, Any] = {**dict(relay), **dict(telemetry)} if telemetry else dict(relay)
     for attr_name, value in relay_data.items():
         if attr_name == "state":
-            value = RelayState(value).pretty()
+            value = value.pretty() if hasattr(value, "pretty") else RelayState(value).pretty()
         elif attr_name == "type":
             value = RelayType(value).pretty()
         elif attr_name == "function":

@@ -148,12 +148,13 @@ def parse_pcap(pcap_file: Path) -> None:
             click.echo()  # Extra newline for readability
 
 
-@debug.command()
+@debug.command(name="set-equipment")
 @click.argument("bow_id", type=int)
 @click.argument("equip_id", type=int)
 @click.argument("is_on")
+@click.option("--duration", type=int, help="Duration in minutes for a countdown timer")
 @click.pass_context
-def set_equipment(ctx: click.Context, bow_id: int, equip_id: int, is_on: str) -> None:
+def set_equipment(ctx: click.Context, bow_id: int, equip_id: int, is_on: str, duration: int | None) -> None:
     """Control equipment by turning it on/off or setting a value.
 
     BOW_ID: The Body of Water (pool/spa) system ID
@@ -161,6 +162,7 @@ def set_equipment(ctx: click.Context, bow_id: int, equip_id: int, is_on: str) ->
     IS_ON: Equipment state - can be:
         - Boolean: true/false, on/off, 1/0
         - Integer: 0-100 for variable speed equipment (0=off, 1-100=speed percentage)
+    DURATION: Optional duration in minutes for a countdown timer
 
     For most equipment (relays, lights), use true/false or 1/0.
     For variable speed pumps/filters, use 0-100 to set speed percentage.
@@ -175,8 +177,8 @@ def set_equipment(ctx: click.Context, bow_id: int, equip_id: int, is_on: str) ->
         # Set pump to 50% speed
         omnilogic --host 192.168.1.100 debug set-equipment 7 8 50
 
-        # Turn off pump (0% speed)
-        omnilogic --host 192.168.1.100 debug set-equipment 7 8 0
+        # Turn off pump for 60 minutes
+        omnilogic --host 192.168.1.100 debug set-equipment 7 8 off --duration 60
 
     """
     ensure_connection(ctx)
@@ -190,11 +192,32 @@ def set_equipment(ctx: click.Context, bow_id: int, equip_id: int, is_on: str) ->
     elif is_on_lower in ("false", "off", "no", "0"):
         is_on_value = False
     else:
-        is_on_value = is_on
+        try:
+            is_on_value = int(is_on)
+        except ValueError:
+            is_on_value = is_on
+
+    # Handle duration for countdown timer
+    is_countdown_timer = False
+    end_time_hours = 0
+    end_time_minutes = 0
+    if duration is not None:
+        is_countdown_timer = True
+        end_time_hours = duration // 60
+        end_time_minutes = duration % 60
 
     # Execute the command
     try:
-        asyncio.run(omni.async_set_equipment(bow_id, equip_id, is_on_value))
+        asyncio.run(
+            omni.async_set_equipment(
+                bow_id,
+                equip_id,
+                is_on_value,
+                is_countdown_timer=is_countdown_timer,
+                end_time_hours=end_time_hours,
+                end_time_minutes=end_time_minutes,
+            )
+        )
         if isinstance(is_on_value, bool):
             state = "ON" if is_on_value else "OFF"
             click.echo(f"Successfully set equipment {equip_id} in BOW {bow_id} to {state}")
@@ -202,6 +225,32 @@ def set_equipment(ctx: click.Context, bow_id: int, equip_id: int, is_on: str) ->
             click.echo(f"Successfully set equipment {equip_id} in BOW {bow_id} to {is_on_value}%")
     except Exception as e:
         click.echo(f"Error setting equipment: {e}", err=True)
+        raise click.Abort from e
+
+
+@debug.command(name="set-freeze-protect-override")
+@click.argument("pool_id", type=int)
+@click.argument("interval", type=int)
+@click.pass_context
+def set_freeze_protect_override(ctx: click.Context, pool_id: int, interval: int) -> None:
+    """Override freeze protection for a specified interval.
+
+    POOL_ID: The Body of Water (pool/spa) system ID
+    INTERVAL: Override interval in minutes
+
+    Examples:
+        # Override freeze protection for 60 minutes in Pool
+        omnilogic --host 192.168.1.100 debug set-freeze-protect-override 2 60
+    """
+    ensure_connection(ctx)
+    omni: OmniLogicAPI = ctx.obj["OMNI"]
+
+    # Execute the command
+    try:
+        asyncio.run(omni.async_set_freeze_protect_override(pool_id, interval))
+        click.echo(f"Successfully sent freeze protection override for {interval} minutes to pool {pool_id}")
+    except Exception as e:
+        click.echo(f"Error setting freeze protect override: {e}", err=True)
         raise click.Abort from e
 
 
@@ -397,4 +446,36 @@ def set_csad_orp(ctx: click.Context, bow_id: int, csad_id: int, target: int) -> 
         click.echo(f"Successfully set CSAD {csad_id} in BOW {bow_id} ORP target to {target} mV")
     except Exception as e:
         click.echo(f"Error setting CSAD ORP target: {e}", err=True)
+        raise click.Abort from e
+
+
+@debug.command(name="set-group")
+@click.argument("group_id", type=int)
+@click.argument("is_on")
+@click.pass_context
+def set_group(ctx: click.Context, group_id: int, is_on: str) -> None:
+    """Enable or disable a group (theme).
+
+    GROUP_ID: The group system ID to control
+    IS_ON: State - can be true/false, on/off, 1/0
+
+    Examples:
+        # Enable the Spillovers group
+        omnilogic --host 192.168.1.100 debug set-group 73 true
+
+        # Disable a group
+        omnilogic --host 192.168.1.100 debug set-group 73 false
+    """
+    ensure_connection(ctx)
+    omni: OmniLogicAPI = ctx.obj["OMNI"]
+
+    is_on_value = is_on.lower() in ("true", "on", "yes", "1")
+
+    # Execute the command
+    try:
+        asyncio.run(omni.async_set_group_enable(group_id, is_on_value))
+        state = "ENABLED" if is_on_value else "DISABLED"
+        click.echo(f"Successfully set group {group_id} to {state}")
+    except Exception as e:
+        click.echo(f"Error setting group: {e}", err=True)
         raise click.Abort from e
